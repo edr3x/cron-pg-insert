@@ -20,21 +20,10 @@ var (
 	err    error
 )
 
-func dbConnect() {
-	dbConn, err = pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
-		os.Exit(1)
-	}
-	// WARN: we want connection to be active
-	// defer dbConn.Close(context.Background())
-}
-
 func init() {
 	if err := godotenv.Load(); err != nil {
 		fmt.Println("Error loading .env file")
 	}
-	dbConnect()
 }
 
 func main() {
@@ -63,17 +52,17 @@ func main() {
 				userName := fmt.Sprintf("User_%d", timestamp)
 				userEmail := fmt.Sprintf("user%d@example.com", counter)
 
-				conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+				conn, err := pgx.Connect(context.Background(), os.Getenv("INSERT_DATABASE_URL"))
 				if err != nil {
 					log.Println("Database connection failed:", err)
-					dataChannel <- []byte{}
+					dataChannel <- []byte(strings.Join([]string{"Insert Database connection failed:", err.Error()}, " "))
 					return
 				}
 				defer conn.Close(context.Background())
 				_, err = conn.Exec(context.Background(), "INSERT INTO \"user\" (\"name\", \"email\") VALUES ($1, $2);", userName, userEmail)
 				if err != nil {
 					log.Println("Insert failed:", err)
-					dataChannel <- []byte{}
+					dataChannel <- []byte(strings.Join([]string{"Insert failed:", err.Error()}, " "))
 					return
 				}
 				counter++
@@ -84,10 +73,17 @@ func main() {
 		go func() {
 			for {
 				var userNames []string
+
+				dbConn, err = pgx.Connect(context.Background(), os.Getenv("READ_DATABASE_URL"))
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Read database Unable to connect %v\n", err)
+					os.Exit(1)
+				}
+				defer dbConn.Close(context.Background())
 				rows, err := dbConn.Query(context.Background(), "SELECT \"name\", \"created_at\" FROM \"user\";")
 				if err != nil {
 					log.Println("Query failed:", err)
-					dataChannel <- []byte{}
+					dataChannel <- []byte(strings.Join([]string{"Query failed:", err.Error()}, " "))
 					return
 				}
 				defer rows.Close()
@@ -97,7 +93,7 @@ func main() {
 					var created_at time.Time
 					if err := rows.Scan(&userName, &created_at); err != nil {
 						log.Println("Scan failed:", err)
-						dataChannel <- []byte{}
+						dataChannel <- []byte(strings.Join([]string{"Scan failed:", err.Error()}, " "))
 						return
 					}
 					userNames = append(userNames, userName+" -- "+created_at.String()+"\n")
@@ -105,7 +101,7 @@ func main() {
 
 				if err := rows.Err(); err != nil {
 					log.Println("Row iteration failed:", err)
-					dataChannel <- []byte{}
+					dataChannel <- []byte(strings.Join([]string{"Row iteration failed:", err.Error()}, " "))
 					return
 				}
 
