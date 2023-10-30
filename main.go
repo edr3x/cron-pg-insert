@@ -15,11 +15,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-var (
-	dbConn *pgx.Conn
-	err    error
-)
-
 func init() {
 	if err := godotenv.Load(); err != nil {
 		fmt.Println("Error loading .env file")
@@ -59,6 +54,7 @@ func main() {
 					return
 				}
 				defer conn.Close(context.Background())
+
 				_, err = conn.Exec(context.Background(), "INSERT INTO \"user\" (\"name\", \"email\") VALUES ($1, $2);", userName, userEmail)
 				if err != nil {
 					log.Println("Insert failed:", err)
@@ -74,12 +70,13 @@ func main() {
 			for {
 				var userNames []string
 
-				dbConn, err = pgx.Connect(context.Background(), os.Getenv("READ_DATABASE_URL"))
+				dbConn, err := pgx.Connect(context.Background(), os.Getenv("READ_DATABASE_URL"))
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Read database Unable to connect %v\n", err)
 					os.Exit(1)
 				}
 				defer dbConn.Close(context.Background())
+
 				rows, err := dbConn.Query(context.Background(), "SELECT \"name\", \"created_at\" FROM \"user\";")
 				if err != nil {
 					log.Println("Query failed:", err)
